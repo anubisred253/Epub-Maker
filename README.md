@@ -102,6 +102,7 @@
 - 标准库依赖：`tkinter`、`os`、`re`、`html` 等
 
 ## exe编译方法
+该命令适用于 Windows 环境
 ```
 pyinstaller --add-data "epub maker.ico;." -F -w -i "epub maker.ico" "epub maker.py"
 ```
