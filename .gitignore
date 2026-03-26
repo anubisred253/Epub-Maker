@@ -1,0 +1,8 @@
+
+.vscode/
+__pycache__/
+html/
+template/
+build/
+dist/
+*.spec
