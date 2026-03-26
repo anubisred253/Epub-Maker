@@ -6,3 +6,5 @@ template/
 build/
 dist/
 *.spec
+version_info.txt
+.gitignore
