@@ -212,22 +212,20 @@ class EpubMakerApp:
         )
         self.btn_analyze.grid(row=2, column=0, sticky="ew", pady=4)
 
+        self.btn_save = ttk.Button(right_frame, text="保存TXT", command=self.save_txt)
+        self.btn_save.grid(row=3, column=0, sticky="ew", pady=4)
+
         self.btn_generate = ttk.Button(
             right_frame, text="生成HTML", command=self.generate_html
         )
-        self.btn_generate.grid(row=3, column=0, sticky="ew", pady=4)
-
-        self.btn_generate_epub = ttk.Button(
-            right_frame, text="生成EPUB", command=self.generate_epub
-        )
-        self.btn_generate_epub.grid(row=4, column=0, sticky="ew", pady=4)
+        self.btn_generate.grid(row=4, column=0, sticky="ew", pady=4)
 
         self.btn_open_folder = ttk.Button(
             right_frame, text="打开文件夹", command=self.open_app_folder
         )
         self.btn_open_folder.grid(row=5, column=0, sticky="ew", pady=4)
 
-        meta_frame = ttk.LabelFrame(right_frame, text="EPUB 信息")
+        meta_frame = ttk.LabelFrame(right_frame, text="生成 EPUB")
         meta_frame.grid(row=6, column=0, sticky="ew", pady=(10, 6))
         meta_frame.columnconfigure(1, weight=1)
 
@@ -261,6 +259,13 @@ class EpubMakerApp:
             justify="left",
             wraplength=180,
         ).grid(row=4, column=0, columnspan=2, sticky="w", padx=6, pady=(0, 6))
+
+        self.btn_generate_epub = ttk.Button(
+            meta_frame, text="生成EPUB", command=self.generate_epub
+        )
+        self.btn_generate_epub.grid(
+            row=5, column=0, columnspan=2, sticky="ew", padx=6, pady=(0, 6)
+        )
 
         level_frame = ttk.LabelFrame(right_frame, text="HTML 级别")
         level_frame.grid(row=7, column=0, sticky="ew", pady=(10, 6))
@@ -692,6 +697,38 @@ class EpubMakerApp:
         self.update_status()
         messagebox.showinfo("成功", "TXT 已加载到内存。")
 
+    def save_txt(self):
+        text = self.get_text_from_widget()
+        if not text.strip():
+            messagebox.showwarning("提示", "当前没有可保存的文本。")
+            return
+
+        path = self.current_file
+        if not path:
+            path = filedialog.asksaveasfilename(
+                title="保存TXT文件",
+                defaultextension=".txt",
+                filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")],
+                initialdir=self.base_dir,
+            )
+            if not path:
+                return
+
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
+        except Exception as e:
+            messagebox.showerror("保存失败", f"保存文件时出错：\n{e}")
+            return
+
+        self.current_file = path
+        self.current_text = text
+        self.rebuild_line_offsets()
+        self.update_status()
+        messagebox.showinfo("成功", f"TXT 已保存：\n{path}")
+
     # =========================
     # 功能：分析章节
     # =========================
@@ -938,7 +975,6 @@ class EpubMakerApp:
 
     def get_cover_info(self):
         if not self.cover_image_path:
-            messagebox.showwarning("提示", "请选择封面图片。")
             return None
 
         source_ext = os.path.splitext(self.cover_image_path)[1].lower()
@@ -973,8 +1009,6 @@ class EpubMakerApp:
             return
 
         cover_info = self.get_cover_info()
-        if not cover_info:
-            return
 
         if not os.path.exists(self.template_epub_path):
             messagebox.showerror("模板缺失", f"缺少模板文件：\n{self.template_epub_path}")
@@ -1027,20 +1061,24 @@ class EpubMakerApp:
         os.makedirs(images_dir, exist_ok=True)
 
         self.cleanup_old_text_files(text_dir)
+        self.cleanup_old_cover_images(images_dir)
 
         for document in documents:
             out_path = os.path.join(text_dir, document["filename"])
             with open(out_path, "w", encoding="utf-8") as f:
                 f.write(document["content"])
 
-        cover_output_path = os.path.join(images_dir, cover_info["filename"])
-        shutil.copyfile(cover_info["source_path"], cover_output_path)
+        if cover_info:
+            cover_output_path = os.path.join(images_dir, cover_info["filename"])
+            shutil.copyfile(cover_info["source_path"], cover_output_path)
 
         coverpage_path = os.path.join(text_dir, "coverpage.xhtml")
         nav_path = os.path.join(text_dir, "nav.xhtml")
         opf_path = os.path.join(oebps_dir, "content.opf")
 
-        self.update_coverpage(coverpage_path, metadata["title"], cover_info["src"])
+        self.update_coverpage(
+            coverpage_path, metadata["title"], cover_info["src"] if cover_info else None
+        )
         self.update_nav(nav_path, documents)
         self.update_content_opf(opf_path, metadata, cover_info, documents)
 
@@ -1056,30 +1094,54 @@ class EpubMakerApp:
             except Exception:
                 pass
 
+    def cleanup_old_cover_images(self, images_dir):
+        for name in os.listdir(images_dir):
+            lower_name = name.lower()
+            if not lower_name.startswith("cover."):
+                continue
+            try:
+                os.remove(os.path.join(images_dir, name))
+            except Exception:
+                pass
+
     def update_coverpage(self, coverpage_path, book_title, cover_src):
         with open(coverpage_path, "r", encoding="utf-8") as f:
             content = f.read()
 
         escaped_title = html.escape(book_title)
-        escaped_src = html.escape(cover_src, quote=True)
 
         content, title_count = re.subn(
             r"(<title>).*?(</title>)",
-            rf"\1{escaped_title}\2",
-            content,
-            count=1,
-            flags=re.S,
-        )
-        content, img_count = re.subn(
-            r'(<img\b[^>]*\bsrc=")[^"]*(")',
-            rf"\1{escaped_src}\2",
+            lambda m: f"{m.group(1)}{escaped_title}{m.group(2)}",
             content,
             count=1,
             flags=re.S,
         )
 
-        if title_count == 0 or img_count == 0:
-            raise RuntimeError("模板中的 coverpage.xhtml 缺少必要节点。")
+        if title_count == 0:
+            raise RuntimeError("模板中的 coverpage.xhtml 缺少 title 节点。")
+
+        content = re.sub(
+            r'(<h1\b[^>]*\btitle=")[^"]*(")',
+            lambda m: f'{m.group(1)}{html.escape(book_title, quote=True)}{m.group(2)}',
+            content,
+            count=1,
+            flags=re.S,
+        )
+
+        if cover_src:
+            escaped_src = html.escape(cover_src, quote=True)
+            content, img_count = re.subn(
+                r'(<img\b[^>]*\bsrc=")[^"]*(")',
+                lambda m: f"{m.group(1)}{escaped_src}{m.group(2)}",
+                content,
+                count=1,
+                flags=re.S,
+            )
+            if img_count == 0:
+                raise RuntimeError("模板中的 coverpage.xhtml 缺少封面图片节点。")
+        else:
+            content = re.sub(r"\s*<img\b[^>]*?/?>\s*", "\n", content, count=1, flags=re.S)
 
         with open(coverpage_path, "w", encoding="utf-8", newline="\n") as f:
             f.write(content)
@@ -1239,11 +1301,12 @@ class EpubMakerApp:
             if href == "Text/coverpage.xhtml":
                 coverpage_id = item_id
 
-        cover_item = ET.SubElement(manifest_node, f"{{{opf_ns}}}item")
-        cover_item.set("id", cover_item_id)
-        cover_item.set("href", cover_info["href"])
-        cover_item.set("media-type", cover_info["media_type"])
-        cover_item.set("properties", "cover-image")
+        if cover_info:
+            cover_item = ET.SubElement(manifest_node, f"{{{opf_ns}}}item")
+            cover_item.set("id", cover_item_id)
+            cover_item.set("href", cover_info["href"])
+            cover_item.set("media-type", cover_info["media_type"])
+            cover_item.set("properties", "cover-image")
 
         chapter_ids = []
         for index, document in enumerate(documents, start=1):
