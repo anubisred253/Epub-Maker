@@ -287,13 +287,12 @@ class EpubMakerApp:
 
         note = (
             "说明：\n"
-            "1. 先读取TXT\n"
-            "2. 分析章节\n"
-            "3. 点击左侧章节定位\n"
-            "4. 可直接改中间文本\n"
-            "5. 根据层级关键字配置 H1-H4\n"
-            "6. 生成HTML或EPUB\n"
-            "7. 使用【--】手动标注章节"
+            "1. 读取TXT，分析章节\n"
+            "2. 点击左侧章节定位\n"
+            "3. 可直接改中间文本\n"
+            "4. 根据层级关键字配置 H1-H4\n"
+            "5. 生成HTML或EPUB\n"
+            "6. 使用【--】手动标注章节"
         )
         ttk.Label(right_frame, text=note, justify="left").grid(
             row=9, column=0, sticky="nw"
