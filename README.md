@@ -1,11 +1,10 @@
 # Epub Maker
 
-**献给所有喜爱网文的人**
+**献给所有喜爱阅读的人**
 
 `Epub Maker` 是一个基于 Python `tkinter` 的桌面工具，用来把整个 TXT 文件按标题层级拆分，并导出 HTML 或直接生成 EPUB。
 
-<img width="1325" height="833" alt="图片" src="https://github.com/user-attachments/assets/1159fe13-7075-4897-8319-6f83d47d44c4" />
-
+<img width="1995" height="1248" alt="图片" src="https://github.com/user-attachments/assets/863062fb-dc9f-4998-b5e2-921599bd5a80" />
 
 ## 功能简介
 
