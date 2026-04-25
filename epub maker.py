@@ -10,6 +10,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime, timezone
 from xml.etree import ElementTree as ET
+
 # 作者：龙骑兵
 
 
@@ -29,6 +30,7 @@ def app_base_path():
 
 class EpubMakerApp:
     MANUAL_HEADING_PATTERN = re.compile(r"^【--([1-4])】(.+)$")
+    MANUAL_NON_HEADING_PREFIX = "【==】"
 
     def __init__(self, root):
         self.root = root
@@ -250,9 +252,9 @@ class EpubMakerApp:
             row=2, column=1, sticky="ew", padx=(0, 6), pady=3
         )
 
-        ttk.Button(meta_frame, text="选择封面图片", command=self.choose_cover_image).grid(
-            row=3, column=0, columnspan=2, sticky="ew", padx=6, pady=(6, 3)
-        )
+        ttk.Button(
+            meta_frame, text="选择封面图片", command=self.choose_cover_image
+        ).grid(row=3, column=0, columnspan=2, sticky="ew", padx=6, pady=(6, 3))
         ttk.Label(
             meta_frame,
             textvariable=self.cover_image_var,
@@ -288,11 +290,11 @@ class EpubMakerApp:
         note = (
             "说明：\n"
             "1. 读取TXT，分析章节\n"
-            "2. 点击左侧章节定位\n"
-            "3. 可直接改中间文本\n"
-            "4. 根据层级关键字配置 H1-H4\n"
-            "5. 生成HTML或EPUB\n"
-            "6. 使用【--1】到【--4】手动标注 H1-H4"
+            "2. 点击左侧章节定位，接改中间文本\n"
+            "3. 根据层级关键字配置 H1-H4\n"
+            "4. 生成HTML或EPUB\n"
+            "5. 使用【--1】到【--4】手动标注 H1-H4\n"
+            "6. 使用【==】强制标注为非章节"
         )
         ttk.Label(right_frame, text=note, justify="left").grid(
             row=9, column=0, sticky="nw"
@@ -450,9 +452,7 @@ class EpubMakerApp:
             return None
 
         subjects = [
-            item.strip()
-            for item in re.split(r"[，,]", subject_raw)
-            if item.strip()
+            item.strip() for item in re.split(r"[，,]", subject_raw) if item.strip()
         ]
 
         return {
@@ -472,13 +472,21 @@ class EpubMakerApp:
 
         for idx, item in enumerate(self.items):
             start_line = item["start_line"]
-            end_line = self.items[idx + 1]["start_line"] if idx + 1 < len(self.items) else len(lines)
+            end_line = (
+                self.items[idx + 1]["start_line"]
+                if idx + 1 < len(self.items)
+                else len(lines)
+            )
             block_lines = lines[start_line:end_line]
             if not block_lines:
                 continue
 
-            title_line = block_lines[0].strip()
-            paragraphs = [line.strip() for line in block_lines[1:] if line.strip()]
+            title_line = self.strip_manual_non_heading_marker(block_lines[0]).strip()
+            paragraphs = [
+                self.strip_manual_non_heading_marker(line).strip()
+                for line in block_lines[1:]
+                if self.strip_manual_non_heading_marker(line).strip()
+            ]
             sections.append(
                 {
                     "item": item,
@@ -536,6 +544,17 @@ class EpubMakerApp:
         line = line.strip()
         match = self.MANUAL_HEADING_PATTERN.match(line)
         return bool(match and match.group(2).strip())
+
+    def is_manual_non_heading(self, line):
+        return line.strip().startswith(self.MANUAL_NON_HEADING_PREFIX)
+
+    def strip_manual_non_heading_marker(self, line):
+        leading_match = re.match(r"^(\s*)", line)
+        leading = leading_match.group(1) if leading_match else ""
+        content = line[len(leading) :]
+        if content.startswith(self.MANUAL_NON_HEADING_PREFIX):
+            return leading + content[len(self.MANUAL_NON_HEADING_PREFIX) :].lstrip()
+        return line
 
     def split_manual_heading_title(self, title_line):
         match = self.MANUAL_HEADING_PATTERN.match(title_line.strip())
@@ -758,15 +777,18 @@ class EpubMakerApp:
             if not line:
                 continue
 
+            if self.is_manual_non_heading(line):
+                continue
+
             if self.is_manual_heading_title(line):
                 level, prefix, full_title = self.split_manual_heading_title(line)
                 if not full_title:
                     continue
 
                 warning = ""
-                if self.has_suspicious_title_tail(full_title) or self.next_line_starts_with_punct(
-                    lines, i, heading_configs
-                ):
+                if self.has_suspicious_title_tail(
+                    full_title
+                ) or self.next_line_starts_with_punct(lines, i, heading_configs):
                     warning = "⚠"
 
                 prev_numbers.pop(level, None)
@@ -1012,11 +1034,15 @@ class EpubMakerApp:
         cover_info = self.get_cover_info()
 
         if not os.path.exists(self.template_epub_path):
-            messagebox.showerror("模板缺失", f"缺少模板文件：\n{self.template_epub_path}")
+            messagebox.showerror(
+                "模板缺失", f"缺少模板文件：\n{self.template_epub_path}"
+            )
             return
 
         group_template_path, content_template_path = self.get_template_paths()
-        if not os.path.exists(group_template_path) or not os.path.exists(content_template_path):
+        if not os.path.exists(group_template_path) or not os.path.exists(
+            content_template_path
+        ):
             messagebox.showerror("模板缺失", "缺少 HTML 模板文件。")
             return
 
@@ -1124,7 +1150,7 @@ class EpubMakerApp:
 
         content = re.sub(
             r'(<h1\b[^>]*\btitle=")[^"]*(")',
-            lambda m: f'{m.group(1)}{html.escape(book_title, quote=True)}{m.group(2)}',
+            lambda m: f"{m.group(1)}{html.escape(book_title, quote=True)}{m.group(2)}",
             content,
             count=1,
             flags=re.S,
@@ -1142,7 +1168,9 @@ class EpubMakerApp:
             if img_count == 0:
                 raise RuntimeError("模板中的 coverpage.xhtml 缺少封面图片节点。")
         else:
-            content = re.sub(r"\s*<img\b[^>]*?/?>\s*", "\n", content, count=1, flags=re.S)
+            content = re.sub(
+                r"\s*<img\b[^>]*?/?>\s*", "\n", content, count=1, flags=re.S
+            )
 
         with open(coverpage_path, "w", encoding="utf-8", newline="\n") as f:
             f.write(content)
@@ -1160,21 +1188,21 @@ class EpubMakerApp:
         )
         content = re.sub(
             r'(<html\b[^>]*\blang=")[^"]*(")',
-            r'\1zh-CN\2',
+            r"\1zh-CN\2",
             content,
             count=1,
             flags=re.S,
         )
         content = re.sub(
             r'(<html\b[^>]*\bxml:lang=")[^"]*(")',
-            r'\1zh-CN\2',
+            r"\1zh-CN\2",
             content,
             count=1,
             flags=re.S,
         )
         content = re.sub(
             r"(<link\b[^>]*\bhref=\")[^\"]*(\"[^>]*>)",
-            r'\1../Styles/main.css\2',
+            r"\1../Styles/main.css\2",
             content,
             count=1,
             flags=re.S,
@@ -1288,7 +1316,10 @@ class EpubMakerApp:
         for item_node in list(manifest_node.findall(f"{{{opf_ns}}}item")):
             href = item_node.get("href", "")
             item_id = item_node.get("id", "")
-            if href.startswith("Text/") and href not in {"Text/coverpage.xhtml", "Text/nav.xhtml"}:
+            if href.startswith("Text/") and href not in {
+                "Text/coverpage.xhtml",
+                "Text/nav.xhtml",
+            }:
                 manifest_node.remove(item_node)
                 continue
             if href.startswith("Images/cover"):
