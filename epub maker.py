@@ -22,7 +22,7 @@ def resource_path(relative_path):
 
 
 def app_base_path():
-    """程序实际所在目录，用于输出 html"""
+    """程序实际所在目录，用于输出文件"""
     if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
@@ -61,12 +61,10 @@ class EpubMakerApp:
         # 默认目录
         self.base_dir = app_base_path()
         self.template_dir = os.path.join(self.base_dir, "template")
-        self.output_dir = os.path.join(self.base_dir, "html")
         self.template_epub_path = os.path.join(self.base_dir, "模板.epub")
         self.epub_output_dir = os.path.join(self.base_dir, "epub")
 
         os.makedirs(self.template_dir, exist_ok=True)
-        os.makedirs(self.output_dir, exist_ok=True)
         os.makedirs(self.epub_output_dir, exist_ok=True)
 
         self.build_ui()
@@ -217,18 +215,13 @@ class EpubMakerApp:
         self.btn_save = ttk.Button(right_frame, text="保存TXT", command=self.save_txt)
         self.btn_save.grid(row=3, column=0, sticky="ew", pady=4)
 
-        self.btn_generate = ttk.Button(
-            right_frame, text="生成HTML", command=self.generate_html
-        )
-        self.btn_generate.grid(row=4, column=0, sticky="ew", pady=4)
-
         self.btn_open_folder = ttk.Button(
             right_frame, text="打开文件夹", command=self.open_app_folder
         )
-        self.btn_open_folder.grid(row=5, column=0, sticky="ew", pady=4)
+        self.btn_open_folder.grid(row=4, column=0, sticky="ew", pady=4)
 
         meta_frame = ttk.LabelFrame(right_frame, text="生成 EPUB")
-        meta_frame.grid(row=6, column=0, sticky="ew", pady=(10, 6))
+        meta_frame.grid(row=5, column=0, sticky="ew", pady=(10, 6))
         meta_frame.columnconfigure(1, weight=1)
 
         ttk.Label(meta_frame, text="标题").grid(
@@ -269,8 +262,8 @@ class EpubMakerApp:
             row=5, column=0, columnspan=2, sticky="ew", padx=6, pady=(0, 6)
         )
 
-        level_frame = ttk.LabelFrame(right_frame, text="HTML 级别")
-        level_frame.grid(row=7, column=0, sticky="ew", pady=(10, 6))
+        level_frame = ttk.LabelFrame(right_frame, text="标题级别")
+        level_frame.grid(row=6, column=0, sticky="ew", pady=(10, 6))
         level_frame.columnconfigure(1, weight=1)
 
         default_keywords = ["章", "", "", ""]
@@ -284,20 +277,20 @@ class EpubMakerApp:
             self.heading_vars[idx] = var
 
         ttk.Separator(right_frame, orient="horizontal").grid(
-            row=8, column=0, sticky="ew", pady=10
+            row=7, column=0, sticky="ew", pady=10
         )
 
         note = (
             "说明：\n"
             "1. 读取TXT，分析章节\n"
-            "2. 点击左侧章节定位，接改中间文本\n"
+            "2. 点击左侧章节定位，直接修改中间文本\n"
             "3. 根据层级关键字配置 H1-H4\n"
-            "4. 生成HTML或EPUB\n"
+            "4. 生成EPUB\n"
             "5. 使用【--1】到【--4】手动标注 H1-H4\n"
             "6. 使用【==】强制标注为非章节"
         )
         ttk.Label(right_frame, text=note, justify="left").grid(
-            row=9, column=0, sticky="nw"
+            row=8, column=0, sticky="nw"
         )
 
         # 底部状态栏
@@ -419,9 +412,6 @@ class EpubMakerApp:
         self.text_widget.mark_set("insert", idx_start)
         self.text_widget.see(idx_start)
         self.text_widget.focus_set()
-
-    def safe_filename(self, seq, title):
-        return f"{seq}.html"
 
     def safe_output_name(self, name, default):
         cleaned = re.sub(r'[\\/:*?"<>|]+', "_", name.strip())
@@ -919,54 +909,7 @@ class EpubMakerApp:
         self.highlight_line(line_no)
 
     # =========================
-    # 生成 HTML
     # =========================
-    def generate_html(self):
-        if not self.items:
-            messagebox.showwarning("提示", "请先分析章节。")
-            return
-
-        heading_configs = self.get_heading_configs()
-        if not heading_configs:
-            return
-
-        group_template_path, content_template_path = self.get_template_paths()
-
-        if not os.path.exists(group_template_path):
-            messagebox.showerror("模板缺失", "缺少模板文件：template/group.html")
-            return
-        if not os.path.exists(content_template_path):
-            messagebox.showerror("模板缺失", "缺少模板文件：template/content.html")
-            return
-
-        with open(group_template_path, "r", encoding="utf-8") as f:
-            group_template = f.read()
-        with open(content_template_path, "r", encoding="utf-8") as f:
-            content_template = f.read()
-
-        sections = self.collect_sections()
-        if not sections:
-            messagebox.showwarning("提示", "没有可导出的章节内容。")
-            return
-
-        # 清空输出目录中的旧 html 文件（只删 html）
-        for name in os.listdir(self.output_dir):
-            if name.lower().endswith(".html") or name.lower().endswith(".xhtml"):
-                try:
-                    os.remove(os.path.join(self.output_dir, name))
-                except Exception:
-                    pass
-
-        documents = self.build_rendered_documents(
-            sections, group_template, content_template, extension="html"
-        )
-        for document in documents:
-            out_path = os.path.join(self.output_dir, document["filename"])
-            with open(out_path, "w", encoding="utf-8") as f:
-                f.write(document["content"])
-
-        messagebox.showinfo("完成", f"HTML 已输出到目录：\n{self.output_dir}")
-
     def build_rendered_documents(
         self, sections, group_template, content_template, extension
     ):
