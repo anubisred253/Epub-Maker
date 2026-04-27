@@ -6,6 +6,7 @@ import shutil
 import zipfile
 import tempfile
 import uuid
+import webbrowser
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime, timezone
@@ -291,6 +292,21 @@ class EpubMakerApp:
         )
         ttk.Label(right_frame, text=note, justify="left").grid(
             row=8, column=0, sticky="nw"
+        )
+        repo_link = tk.Label(
+            right_frame,
+            text="当前版本：1.0.0  点击访问项目主页",
+            fg="#1a73e8",
+            cursor="hand2",
+            anchor="w",
+            justify="left",
+        )
+        repo_link.grid(row=9, column=0, sticky="nw", pady=(6, 0))
+        repo_link.bind(
+            "<Button-1>",
+            lambda _event: webbrowser.open(
+                "https://github.com/anubisred253/Epub-Maker"
+            ),
         )
 
         # 底部状态栏
